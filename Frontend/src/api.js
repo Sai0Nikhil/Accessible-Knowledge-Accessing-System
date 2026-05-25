@@ -95,6 +95,8 @@ export const resourcesApi = {
     return request('GET', `/resources${q}`);
   },
   get:    (id)         => request('GET',    `/resources/${id}`),
+  popular: ()          => request('GET',    '/resources/popular'),
+  similar: (id)        => request('GET',    `/resources/${id}/similar`),
   search: (q)          => request('GET',    `/resources/search?q=${encodeURIComponent(q)}`),
   create: (r)          => request('POST',   '/resources', { body: r }),
   update: (id, r)      => request('PUT',    `/resources/${id}`, { body: r }),

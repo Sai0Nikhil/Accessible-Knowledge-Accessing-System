@@ -51,6 +51,10 @@ public class Resource {
 	@Column(nullable = false, columnDefinition = "boolean not null default true")
 	private boolean published = false;
 
+	/** How many times this resource has been borrowed. Used for popularity ranking. */
+	@Column(nullable = false, columnDefinition = "integer not null default 0")
+	private int borrowCount = 0;
+
 	@Column(nullable = false)
 	private String title;
 
@@ -127,6 +131,9 @@ public class Resource {
 
 	public boolean isPublished() { return published; }
 	public void setPublished(boolean published) { this.published = published; }
+
+	public int getBorrowCount() { return borrowCount; }
+	public void setBorrowCount(int borrowCount) { this.borrowCount = borrowCount; }
 
 	public String getTitle() { return title; }
 	public void setTitle(String title) { this.title = title; }

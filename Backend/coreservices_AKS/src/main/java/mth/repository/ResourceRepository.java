@@ -25,6 +25,12 @@ public interface ResourceRepository extends JpaRepository<Resource, Long> {
 	/** Fetch specific resources by their IDs (regardless of published flag). */
 	List<Resource> findByIdIn(Collection<Long> ids);
 
+	/** Top borrowed published resources for the "Popular" widget. */
+	List<Resource> findTop10ByPublishedTrueOrderByBorrowCountDesc();
+
+	/** All resources ordered by borrow count descending (for librarian/admin). */
+	List<Resource> findAllByOrderByBorrowCountDesc();
+
 	@Transactional
 	long deleteBySectionId(String sectionId);
 

@@ -14,9 +14,42 @@ import {
   requestsApi, externalApi,
 } from './api.js';
 
-/* ── ResourceDetailPanel (unchanged — pure presentation) ───── */
+/* ── ResourceDetailPanel ─────────────────────── */
 
-function ResourceDetailPanel({ resource, allSections, onRequest, requestState, viewerRole }) {
+import { LANGUAGES, translateText } from './translate.js';
+
+function ResourceDetailPanel({ resource, allSections, onRequest, requestState, viewerRole, onTagClick, similarResources, onSimilarClick }) {
+  const [targetLang, setTargetLang] = useState('');
+  const [translatedBody, setTranslatedBody] = useState(null);
+  const [translating, setTranslating] = useState(false);
+
+  // Reset translation when resource changes
+  useEffect(() => {
+    setTargetLang('');
+    setTranslatedBody(null);
+    setTranslating(false);
+  }, [resource?.id]);
+
+  const handleTranslate = async (lang) => {
+    setTargetLang(lang);
+    if (!lang || lang === 'en') {
+      setTranslatedBody(null);
+      setTranslating(false);
+      return;
+    }
+    setTranslating(true);
+    // Translate summary + body
+    const toTranslate = [resource.summary, resource.body].filter(Boolean).join('\n\n');
+    if (!toTranslate) { setTranslating(false); return; }
+    try {
+      const result = await translateText(toTranslate, lang, 'en');
+      setTranslatedBody(result);
+    } catch {
+      setTranslatedBody('⚠️ Translation failed. Please try again.');
+    } finally {
+      setTranslating(false);
+    }
+  };
   if (!resource) return (
     <aside className="detail-panel detail-panel--empty">
       <div className="detail-empty">
@@ -115,8 +148,34 @@ function ResourceDetailPanel({ resource, allSections, onRequest, requestState, v
           </div>
         )}
 
-        <ReadAloud resource={resource} />
+        <ReadAloud resource={resource} translatedText={translatedBody} targetLang={targetLang} />
         <ConceptMap resource={resource} />
+
+        {/* ── Translate ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <label htmlFor="lang-picker" style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>
+            🌐 Translate:
+          </label>
+          <select id="lang-picker" value={targetLang} onChange={e => handleTranslate(e.target.value)}
+            style={{
+              padding: '4px 8px', fontSize: 13, borderRadius: 6,
+              border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer',
+            }}>
+            <option value="">Off (English)</option>
+            {LANGUAGES.filter(l => l.code !== 'en').map(l => (
+              <option key={l.code} value={l.code}>{l.name}</option>
+            ))}
+          </select>
+          {translating && <span style={{ fontSize: 12, color: '#94a3b8' }}>Translating…</span>}
+        </div>
+        {translatedBody && (
+          <div className="detail-section">
+            <h4 className="detail-section-title">Translated ({LANGUAGES.find(l => l.code === targetLang)?.name || targetLang})</h4>
+            <div style={{ fontSize: 14, lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap' }}>
+              {translatedBody}
+            </div>
+          </div>
+        )}
 
         {(resource.author || resource.period || resource.difficulty) && (
           <div className="detail-meta-row">
@@ -207,7 +266,13 @@ function ResourceDetailPanel({ resource, allSections, onRequest, requestState, v
             <h4 className="detail-section-title">Explore Next</h4>
             <div className="detail-tags">
               {[...(resource.similarTo || []), ...(resource.similarTopics || []), ...(resource.relatedTopics || [])]
-                .map(t => <span key={t} className="detail-tag detail-tag--link">{t}</span>)}
+                .map(t => (
+                  <button key={t} type="button"
+                    className="detail-tag detail-tag--link"
+                    onClick={() => onTagClick?.(t)}
+                    style={{ cursor: 'pointer', border: 'none', fontFamily: 'inherit', fontSize: 'inherit' }}
+                  >{t}</button>
+                ))}
             </div>
           </div>
         ) : null}
@@ -215,6 +280,26 @@ function ResourceDetailPanel({ resource, allSections, onRequest, requestState, v
         <div className="detail-tags-footer">
           {(resource.tags || []).map(t => <span key={t} className="detail-raw-tag">#{t}</span>)}
         </div>
+
+        {similarResources && similarResources.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <h4 className="detail-section-title">Similar Resources</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {similarResources.slice(0, 5).map(r => (
+                <button key={r.id} type="button"
+                  onClick={() => onSimilarClick?.(r.id)}
+                  style={{
+                    textAlign: 'left', background: '#f8fafc', border: '1px solid #e2e8f0',
+                    borderRadius: 8, padding: '8px 12px', cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: 13, color: '#1e293b',
+                  }}>
+                  <strong>{r.title}</strong>
+                  {r.author && <span style={{ color: '#64748b' }}> · {r.author}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -234,8 +319,40 @@ function StudentPortal({ user, onLogout, allResources, sections }) {
   const [myRequests, setMyRequests] = useState([]);
   const [showGraph, setShowGraph] = useState(false);
   const [selectedResourceDetail, setSelectedResourceDetail] = useState(null);
+  const [popularResources, setPopularResources] = useState([]);
+
+  // Fetch popular resources on mount
+  useEffect(() => {
+    resourcesApi.popular().then(setPopularResources).catch(() => {});
+  }, []);
 
   useFocusTrap(requestsModalRef, showMyRequests);
+
+  // ── Similar resources ──
+  const [similarResources, setSimilarResources] = useState([]);
+  useEffect(() => {
+    if (!selectedResourceId) { setSimilarResources([]); return; }
+    resourcesApi.similar(selectedResourceId)
+      .then(setSimilarResources)
+      .catch(() => setSimilarResources([]));
+  }, [selectedResourceId]);
+
+  // ── Recently viewed (localStorage, last 5) ──
+  const [recentlyViewed, setRecentlyViewed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('kp_recent') || '[]'); }
+    catch { return []; }
+  });
+  // Track resource selection
+  useEffect(() => {
+    if (!selectedResourceId) return;
+    const res = filteredResources.find(r => r.id === selectedResourceId);
+    if (!res) return;
+    setRecentlyViewed(prev => {
+      const next = [{ id: res.id, title: res.title }, ...prev.filter(r => r.id !== res.id)].slice(0, 5);
+      localStorage.setItem('kp_recent', JSON.stringify(next));
+      return next;
+    });
+  }, [selectedResourceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── External browse state ──
   const [browseMode, setBrowseMode] = useState('catalog'); // 'catalog' | 'openlibrary' | 'arxiv'
@@ -486,6 +603,48 @@ function StudentPortal({ user, onLogout, allResources, sections }) {
                   })}
                 </ul>
               )}
+
+              {/* ── Recently viewed ── */}
+              {recentlyViewed.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <h4 style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
+                    Recently Viewed
+                  </h4>
+                  <ul className="list">
+                    {recentlyViewed.map(r => (
+                      <li key={r.id} className="list-item">
+                        <button type="button"
+                          className={`resource-btn sidebar-btn ${selectedResourceId === r.id ? 'resource-btn--active' : ''}`}
+                          onClick={() => setSelectedResourceId(r.id)}
+                          style={{ padding: '5px 8px' }}>
+                          <span className="list-title" style={{ fontSize: 12 }}>{r.title}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* ── Popular resources ── */}
+              {popularResources.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <h4 style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
+                    🔥 Popular
+                  </h4>
+                  <ul className="list">
+                    {popularResources.slice(0, 5).map(r => (
+                      <li key={r.id} className="list-item">
+                        <button type="button"
+                          className={`resource-btn sidebar-btn ${selectedResourceId === r.id ? 'resource-btn--active' : ''}`}
+                          onClick={() => setSelectedResourceId(r.id)}
+                          style={{ padding: '5px 8px' }}>
+                          <span className="list-title" style={{ fontSize: 12 }}>{r.title}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           ) : (
             /* ── External browse (Open Library / arXiv) ── */
@@ -570,6 +729,9 @@ function StudentPortal({ user, onLogout, allResources, sections }) {
             onRequest={handleRequest}
             requestState={selectedResource ? requestStateByResource[selectedResource.id] : null}
             viewerRole={user?.role}
+            onTagClick={(tag) => { setBrowseMode('catalog'); setSearchText(tag); }}
+            similarResources={similarResources}
+            onSimilarClick={(id) => setSelectedResourceId(id)}
           />
         )}
         {browseMode !== 'catalog' && (

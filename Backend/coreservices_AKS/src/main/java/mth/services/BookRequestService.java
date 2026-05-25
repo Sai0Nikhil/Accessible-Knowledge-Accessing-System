@@ -121,6 +121,13 @@ public class BookRequestService {
 		b.setDueDate(LocalDate.now().plusDays(14));
 		Borrow saved = borrowRepo.save(b);
 
+		// Increment borrow count on the resource (for popularity ranking)
+		if (resource.isPresent()) {
+			Resource r = resource.get();
+			r.setBorrowCount(r.getBorrowCount() + 1);
+			resourceRepo.save(r);
+		}
+
 		br.setStatus(Status.APPROVED);
 		br.setDecisionBy(AuthContext.get().getEmail());
 		br.setDecisionAt(Instant.now());

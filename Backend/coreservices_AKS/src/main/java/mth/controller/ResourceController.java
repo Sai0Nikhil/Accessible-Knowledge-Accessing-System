@@ -36,6 +36,18 @@ public class ResourceController {
 		return svc.search(query);
 	}
 
+	/** Popular (most borrowed) resources: /resources/popular */
+	@GetMapping("/popular")
+	public List<Resource> popular() {
+		return svc.popular();
+	}
+
+	/** Similar resources by tag/theme overlap: /resources/{id}/similar */
+	@GetMapping("/{id}/similar")
+	public List<Resource> similar(@PathVariable Long id) {
+		return svc.similar(id);
+	}
+
 	@GetMapping("/{id}")
 	public Resource get(@PathVariable Long id) {
 		return svc.get(id);

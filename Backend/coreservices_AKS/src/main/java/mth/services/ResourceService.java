@@ -160,6 +160,66 @@ public class ResourceService {
 		resourceRepo.deleteById(id);
 	}
 
+	/**
+	 * Find resources similar to the given one, ranked by overlap in
+	 * tags + keyThemes + sectionId. Excludes the resource itself.
+	 * Limited to top 8 results.
+	 */
+	public List<Resource> similar(Long id) {
+		RoleGuard.requireLoggedIn();
+		Resource src = resourceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Resource not found: " + id));
+
+		List<Resource> candidates = resourceRepo.findAllByOrderByCreatedAtDesc();
+		List<Scored> scored = new ArrayList<>();
+
+		for (Resource r : candidates) {
+			if (r.getId().equals(id)) continue;
+			// Students only see published resources
+			if ("Student".equals(AuthContext.get().getRole()) && !r.isPublished()) continue;
+
+			int score = 0;
+			// +2 for each shared tag
+			if (src.getTags() != null && r.getTags() != null) {
+				for (String t : src.getTags()) {
+					if (r.getTags().contains(t)) score += 2;
+				}
+			}
+			// +3 for each shared keyTheme
+			if (src.getKeyThemes() != null && r.getKeyThemes() != null) {
+				for (String t : src.getKeyThemes()) {
+					if (r.getKeyThemes().contains(t)) score += 3;
+				}
+			}
+			// +1 if same section
+			if (src.getSectionId() != null && src.getSectionId().equals(r.getSectionId())) {
+				score += 1;
+			}
+			if (score > 0) {
+				scored.add(new Scored(r, score));
+			}
+		}
+
+		scored.sort((a, b) -> Integer.compare(b.score, a.score));
+		return scored.stream()
+				.limit(8)
+				.map(s -> s.resource)
+				.collect(Collectors.toList());
+	}
+
+	private static record Scored(Resource resource, int score) {}
+
+	/** Return the top borrowed published resources (for the "Popular" widget). */
+	public List<Resource> popular() {
+		RoleGuard.requireLoggedIn();
+		// Students see only published popular resources; others see all.
+		if ("Student".equals(AuthContext.get().getRole())) {
+			return resourceRepo.findTop10ByPublishedTrueOrderByBorrowCountDesc();
+		}
+		// For librarians/admins, return all resources ordered by borrow count
+		return resourceRepo.findAllByOrderByBorrowCountDesc();
+	}
+
 	/** Admin-only: flip the published bit. Returns the updated resource. */
 	public Resource setPublished(Long id, boolean published) {
 		RoleGuard.requireRole("Admin");

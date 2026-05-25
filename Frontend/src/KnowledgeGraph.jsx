@@ -37,11 +37,15 @@ const DEFAULT_COLOR = '#64748b';
  * Weight = number of overlaps (controls visual edge strength).
  */
 function buildGraph(resources) {
+  // Compute node radius from borrowCount (min 6, max 20)
+  const maxBorrows = Math.max(...resources.map(r => r.borrowCount || 0), 1);
   const nodes = resources.map(r => ({
     id: r.id,
     title: r.title,
     sectionId: r.sectionId,
     author: r.author,
+    borrowCount: r.borrowCount || 0,
+    radius: 6 + ((r.borrowCount || 0) / maxBorrows) * 14,
     tags: new Set([
       ...(r.tags || []),
       ...(r.keyThemes || []),
@@ -126,7 +130,7 @@ function KnowledgeGraph({ resources, sections, onSelect, onClose }) {
       .style('cursor', 'pointer');
 
     node.append('circle')
-      .attr('r', 12)
+      .attr('r', d => d.radius || 10)
       .attr('fill', d => SECTION_COLORS[d.sectionId] || DEFAULT_COLOR)
       .attr('stroke', 'white')
       .attr('stroke-width', 2);
@@ -206,7 +210,8 @@ function KnowledgeGraph({ resources, sections, onSelect, onClose }) {
       </header>
 
       <div ref={containerRef} style={{ flex: 1, position: 'relative', background: '#f8fafc' }}>
-        <svg ref={svgRef} width="100%" height="100%" />
+        <svg ref={svgRef} width="100%" height="100%"
+          role="img" aria-label="Knowledge graph showing {data.nodes.length} resources connected by shared tags and themes" />
 
         {hover && (
           <div style={{

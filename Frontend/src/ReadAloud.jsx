@@ -21,7 +21,7 @@ function buildText(resource) {
   return parts.join('. ');
 }
 
-function ReadAloud({ resource }) {
+function ReadAloud({ resource, translatedText, targetLang }) {
   const [voices, setVoices] = useState([]);
   const [voiceURI, setVoiceURI] = useState('');
   const [rate, setRate] = useState(1.0);
@@ -49,7 +49,11 @@ function ReadAloud({ resource }) {
   // Stop speaking when the user navigates away or the resource changes.
   useEffect(() => () => stop(), [resource?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const text = useMemo(() => buildText(resource), [resource]);
+  const text = useMemo(() => {
+    // If translated text is available, read that instead of the original
+    if (translatedText) return translatedText;
+    return buildText(resource);
+  }, [resource, translatedText]);
 
   const play = () => {
     if (!SUPPORTED || !text) return;
@@ -57,6 +61,8 @@ function ReadAloud({ resource }) {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = rate;
     u.pitch = 1;
+    // Set language on the utterance so the browser knows which TTS engine to use
+    if (targetLang) u.lang = targetLang;
     const v = voices.find(x => x.voiceURI === voiceURI);
     if (v) u.voice = v;
     u.onstart   = () => setState('playing');
@@ -151,7 +157,11 @@ function ReadAloud({ resource }) {
               aria-label="Voice selection"
             >
               {voices
-                .filter(v => v.lang && (v.lang.startsWith('en') || v.lang.startsWith('hi') || v.lang.startsWith('te')))
+                .filter(v => v.lang && (
+                  v.lang.startsWith('en') || v.lang.startsWith('hi') ||
+                  v.lang.startsWith('te') || v.lang.startsWith('ta') ||
+                  v.lang.startsWith('bn') || v.lang.startsWith('mr')
+                ))
                 .map(v => (
                   <option key={v.voiceURI} value={v.voiceURI}>
                     {v.name} ({v.lang})
