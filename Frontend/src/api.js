@@ -11,6 +11,10 @@ const API_BASE_URL =
   (import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
   'http://localhost:8000';
 
+const REVIEWS_API_BASE_URL =
+  (import.meta.env && import.meta.env.VITE_REVIEWS_API_BASE_URL) ||
+  (API_BASE_URL.includes(':8001') ? 'http://localhost:8002' : API_BASE_URL);
+
 export const TOKEN_STORAGE_KEY = 'kp_jwt';
 
 // ── token helpers ────────────────────────────────────────────
@@ -50,6 +54,31 @@ async function request(method, path, { body, auth = true } = {}) {
   }
   // Some endpoints (signin, signup, /delete) wrap success as {code: 200, ...}
   // Treat non-200 application codes as errors too so callers don't have to.
+  if (data && typeof data.code === 'number' && data.code >= 400) {
+    throw new Error(data.message || 'Request failed');
+  }
+  return data;
+}
+
+async function reviewsRequest(method, path, { body, auth = true } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth) {
+    const t = getStoredToken();
+    if (t) headers['Token'] = t;
+  }
+  const res = await fetch(`${REVIEWS_API_BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  let data = {};
+  try { data = await res.json(); } catch { /* empty body */ }
+
+  if (!res.ok) {
+    const msg = data && data.message ? data.message : `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
   if (data && typeof data.code === 'number' && data.code >= 400) {
     throw new Error(data.message || 'Request failed');
   }
@@ -162,7 +191,7 @@ export const borrowsApi = {
 // ── reviews (Node.js + MongoDB) ──────────────────────────────
 
 export const reviewsApi = {
-  list:   (resourceId) => request('GET', `/reviews?resourceId=${encodeURIComponent(resourceId)}`),
-  create: (review)     => request('POST', '/reviews', { body: review }),
-  remove: (id)         => request('DELETE', `/reviews/${id}`),
+  list:   (resourceId) => reviewsRequest('GET', `/reviews?resourceId=${encodeURIComponent(resourceId)}`),
+  create: (review)     => reviewsRequest('POST', '/reviews', { body: review }),
+  remove: (id)         => reviewsRequest('DELETE', `/reviews/${id}`),
 };

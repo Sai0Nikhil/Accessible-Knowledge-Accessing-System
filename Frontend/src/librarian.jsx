@@ -21,6 +21,7 @@ function Librarian({ user, onLogout, sections, resources, reload }) {
   // Request inbox state
   const [pendingRequests, setPendingRequests] = useState([]);
   const [requestStatusFilter, setRequestStatusFilter] = useState('pending');
+  const [allPendingRequestsCount, setAllPendingRequestsCount] = useState(0);
 
   // Open Library import state
   const [importQuery, setImportQuery] = useState('');
@@ -28,8 +29,29 @@ function Librarian({ user, onLogout, sections, resources, reload }) {
   const [importTargetSection, setImportTargetSection] = useState(sections[0]?.id || 'literature');
   const [importingKey, setImportingKey] = useState(null);
 
+  const loadPendingCount = async () => {
+    try {
+      const list = await requestsApi.list('pending');
+      setAllPendingRequestsCount(list.length);
+    } catch (e) {
+      console.error('Failed to load pending requests count:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingCount();
+    const interval = setInterval(loadPendingCount, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   const loadRequests = async (status = requestStatusFilter) => {
-    try { setPendingRequests(await requestsApi.list(status)); }
+    try {
+      const list = await requestsApi.list(status);
+      setPendingRequests(list);
+      if (status === 'pending') {
+        setAllPendingRequestsCount(list.length);
+      }
+    }
     catch (e) { setError(e.message); }
   };
 
@@ -45,6 +67,9 @@ function Librarian({ user, onLogout, sections, resources, reload }) {
       if (action === 'approve') await requestsApi.approve(id, notes);
       else                       await requestsApi.reject(id, notes);
       loadRequests();
+      if (requestStatusFilter !== 'pending') {
+        loadPendingCount();
+      }
     } catch (e) { setError(e.message); }
   };
 
@@ -240,6 +265,12 @@ function Librarian({ user, onLogout, sections, resources, reload }) {
         </div>
       </header>
 
+      {allPendingRequestsCount > 0 && (
+        <div className="lib-alert-banner" onClick={() => setActiveTab('requests')}>
+          <span>🔔 <strong>Pending Requests:</strong> You have {allPendingRequestsCount} pending borrow request{allPendingRequestsCount > 1 ? 's' : ''} that require action. Click to view.</span>
+        </div>
+      )}
+
       <div className="lib-tabs">
         <button
           type="button"
@@ -260,7 +291,7 @@ function Librarian({ user, onLogout, sections, resources, reload }) {
           className={`lib-tab ${activeTab === 'requests' ? 'lib-tab--active' : ''}`}
           onClick={() => setActiveTab('requests')}
         >
-          📨 Requests
+          📨 Requests {allPendingRequestsCount > 0 && <span className="lib-tab-count bg-amber">{allPendingRequestsCount}</span>}
         </button>
         <button
           type="button"

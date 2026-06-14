@@ -529,6 +529,40 @@ function StudentPortal({ user, onLogout, allResources, sections }) {
   const [showGraph, setShowGraph] = useState(false);
   const [selectedResourceDetail, setSelectedResourceDetail] = useState(null);
   const [popularResources, setPopularResources] = useState([]);
+  const [studentNotifications, setStudentNotifications] = useState([]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const requests = await requestsApi.list();
+      const dismissedJson = localStorage.getItem('aks_dismissed_notifications');
+      const dismissedIds = dismissedJson ? JSON.parse(dismissedJson) : [];
+      
+      const notifyRequests = requests.filter(r => 
+        (r.status === 'APPROVED' || r.status === 'REJECTED') &&
+        !dismissedIds.includes(r.id)
+      );
+      setStudentNotifications(notifyRequests);
+      setMyRequests(requests);
+    } catch (e) {
+      console.error('Failed to load notifications:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  const dismissStudentNotification = (id) => {
+    const dismissedJson = localStorage.getItem('aks_dismissed_notifications');
+    const dismissedIds = dismissedJson ? JSON.parse(dismissedJson) : [];
+    if (!dismissedIds.includes(id)) {
+      dismissedIds.push(id);
+      localStorage.setItem('aks_dismissed_notifications', JSON.stringify(dismissedIds));
+    }
+    setStudentNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   // Novelty features state
   const [searchType, setSearchType] = useState('all'); // 'all' | 'author_researcher' | 'tag'
@@ -777,6 +811,36 @@ function StudentPortal({ user, onLogout, allResources, sections }) {
           </div>
         </div>
       </header>
+
+      {studentNotifications.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {studentNotifications.map(notification => (
+            <div key={notification.id} style={{
+              background: notification.status === 'APPROVED' ? '#f0fdf4' : '#fef2f2',
+              border: '1px solid',
+              borderColor: notification.status === 'APPROVED' ? '#dcfce7' : '#fee2e2',
+              borderLeft: `4px solid ${notification.status === 'APPROVED' ? '#16a34a' : '#dc2626'}`,
+              padding: '12px 18px',
+              borderRadius: 8,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              color: notification.status === 'APPROVED' ? '#14532d' : '#7f1d1d',
+              fontSize: 14,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+              fontFamily: 'var(--font-body)',
+            }}>
+              <div>
+                🔔 <strong>Request Update:</strong> Your request to borrow <strong>{notification.resourceTitle}</strong> was <strong>{notification.status}</strong> on {notification.decisionAt ? new Date(notification.decisionAt).toLocaleString() : 'recently'}
+                {notification.decisionNotes && <span> (Note: <em>"{notification.decisionNotes}"</em>)</span>}
+              </div>
+              <button onClick={() => dismissStudentNotification(notification.id)} style={{
+                background: 'none', border: 'none', color: 'inherit', fontWeight: 'bold', cursor: 'pointer', fontSize: 16, padding: '0 4px', display: 'flex', alignItems: 'center'
+              }} aria-label="Dismiss notification">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <main id="main-content" className="section-layout">
         {/* ── LEFT SIDEBAR: vertical tabs + resource list ── */}

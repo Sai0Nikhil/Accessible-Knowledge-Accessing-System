@@ -417,3 +417,34 @@ Match Knowledge Portal colors + typography
 .librarian-main {
   grid-template-columns: 1fr 1fr !important;
 }
+
+/* Notification Banners and Badges */
+.lib-alert-banner {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-left: 4px solid #f59e0b;
+  padding: 0.75rem 1.5rem;
+  margin: 1rem 1.5rem 0;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #b45309;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lib-alert-banner:hover {
+  background: #fef3c7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.12);
+}
+
+.lib-tab-count.bg-amber {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.25);
+}
